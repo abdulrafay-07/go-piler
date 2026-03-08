@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -18,11 +19,15 @@ const (
 	CONST = "CONST"
 	VAR = "VAR"
 	TYPE = "TYPE"
+	UNKNOWN = "UNKNOWN"
 
 	SEMICOLON = "SEMICOLON"
 	COLON = "COLON"
 	EQUALS = "EQUALS"
 	QUICK_ASSIGNMENT = "QUICK_ASSIGNMENT"
+
+	INT = "INT"
+	FLOAT = "FLOAT"
 )
 
 var keywords = map[string]TokenType{
@@ -33,6 +38,7 @@ var keywords = map[string]TokenType{
 	"bool":   TYPE,
 	"string": TYPE,
 	"rune":   TYPE,
+	"unknown": UNKNOWN,
 }
 
 var symbols = map[string]TokenType{
@@ -55,6 +61,7 @@ type Token struct {
 }
 
 func LookupWords(word string) Token {
+	fmt.Println("word", word)
 	// Check in keywords
 	if tok, ok := keywords[word]; ok {
 		return Token{
@@ -71,10 +78,7 @@ func LookupWords(word string) Token {
 		}
 	}
 
-	return Token{
-		name: ID,
-		value: word,
-	}
+	return getTokenFromRegex(word)
 }
 
 func isWordBreaker(ch rune) bool {
@@ -83,6 +87,35 @@ func isWordBreaker(ch rune) bool {
 
 func isWhitespace(ch rune) bool {
 	return unicode.IsSpace(ch)
+}
+
+func getTokenFromRegex(word string) Token {
+	intRegex := regexp.MustCompile(`^[0-9]+$`)
+	floatRegex := regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
+	identifierRegex := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+
+	switch {
+		case intRegex.MatchString(word):
+			return Token{
+				name: INT,
+				value: word,
+			}
+		case floatRegex.MatchString(word):
+			return Token{
+				name: FLOAT,
+				value: word,
+			}
+		case identifierRegex.MatchString(word):
+			return Token{
+				name: ID,
+				value: word,
+			}
+		default:
+			return Token{
+				name: UNKNOWN,
+				value: word,
+			}
+	}
 }
 
 func main() {
@@ -105,14 +138,18 @@ func main() {
 			log.Fatal(err)
 		}
 
-		if isWordBreaker(ch) {
+		if isWhitespace(ch) {
 			if builder.Len() > 0 {
 				tokens = append(tokens, LookupWords(builder.String()))
 				builder.Reset()
 			}
+			continue
+		}
 
-			if isWhitespace(ch) {
-				continue
+		if isWordBreaker(ch) {
+			if builder.Len() > 0 {
+				tokens = append(tokens, LookupWords(builder.String()))
+				builder.Reset()
 			}
 		}
 
@@ -120,6 +157,11 @@ func main() {
 		if err != nil {
 			log.Fatal(err.Error())
 		}
+	}
+
+	if builder.Len() > 0 {
+		tokens = append(tokens, LookupWords(builder.String()))
+		builder.Reset()
 	}
 
 	fmt.Println("Tokens", tokens)
